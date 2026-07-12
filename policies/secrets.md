@@ -10,6 +10,9 @@ Never print, commit, or log secrets, keys, tokens, passwords, or `.env` contents
 - Redact secrets in any output (`sk-...`, `ghp_...`, connection strings, etc.).
 - Never write secrets into commit history, PRs, issues, or docs.
 - If a secret is found already committed, flag it — do not silently propagate.
+- **Shell env inheritance:** the agent inherits the full shell environment, so any exported
+  secret (e.g. `AWS_SECRET_ACCESS_KEY`) propagates to every subprocess it spawns. Scope or
+  scrub the environment before running the agent; don't export prod secrets into its shell.
 
 ## Why
 

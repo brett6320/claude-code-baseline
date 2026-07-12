@@ -10,6 +10,11 @@ Change only what the task needs. Do not expand scope without asking.
 - No new dependencies without asking. Prefer what's already in the project.
 - Match existing code style: naming, comment density, idioms of surrounding code.
 - Verify package names before adding (typosquat / supply-chain risk). Pin versions where sensible.
+- **Slopsquatting:** LLMs hallucinate non-existent package names (~20% of suggestions in one
+  study); attackers pre-register those names maliciously. Before adding any AI-suggested
+  dependency, confirm it actually exists and check its publisher and registration date.
+  Enforce lockfile pinning + package hash verification in CI; no agent-installed packages
+  without human review.
 
 ## Why
 
