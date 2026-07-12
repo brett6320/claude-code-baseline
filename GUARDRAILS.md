@@ -31,6 +31,8 @@ This document is the fuller rationale + reference.
 | # | Policy | File |
 |---|--------|------|
 | 9 | Operational Safety | [policies/safety.md](policies/safety.md) |
+| 10 | Enforcement | [policies/enforcement.md](policies/enforcement.md) |
+| 11 | Threat Model | [policies/threat-model.md](policies/threat-model.md) |
 
 ## Precedence
 
