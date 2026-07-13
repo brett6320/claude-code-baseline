@@ -32,6 +32,15 @@ This document is the fuller rationale + reference.
 |---|--------|------|
 | 9 | Operational Safety | [policies/safety.md](policies/safety.md) |
 
+## Recommendations (optional, not required)
+
+| Recommendation | File |
+|----------------|------|
+| caveman skill — token-efficient responses | [recommendations/caveman.md](recommendations/caveman.md) |
+
+Surface these to the user at initial deployment as optional add-ons. Never install or enable
+without explicit consent.
+
 ## Precedence
 
 1. Explicit, specific user instruction for the current action (can relax merging/branching).
