@@ -1,6 +1,12 @@
 # Policy 12 — Issue Tracking
 
-Applies whenever the project uses an issue tracker (Jira, Linear, GitHub Issues, etc.).
+Applies when **either** is true:
+
+- the project uses an issue tracker (Jira, Linear, GitHub Issues, etc.), **or**
+- issue tracking is set as a global preference (a tracker is designated in the user's global
+  config, to be used across projects).
+
+If either holds, this policy is in force for the work at hand.
 
 ## Rule
 
