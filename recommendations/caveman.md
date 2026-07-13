@@ -28,10 +28,19 @@ or "normal mode".
   clarity matters more than brevity (the skill itself does this for security warnings,
   irreversible-action confirmations, and multi-step sequences).
 
-## How to surface it at initial deployment
+## Surface it FIRST during deployment
 
-When first deploying these guardrails, mention caveman to the user as an **optional**
-efficiency add-on:
+Offer caveman as **one of the very first steps** of deployment — before walking through the
+rest of the guardrails. If the user opts in early, the entire remaining deployment
+conversation runs in compressed mode, cutting token consumption on the setup itself. Offering
+it last wastes that saving.
+
+Recommended deployment order:
+
+1. Offer the caveman skill (this recommendation). If accepted, enable it now.
+2. Proceed with the rest of the guardrail deployment in the (now compressed) session.
+
+When you offer it, mention caveman to the user as an **optional** efficiency add-on:
 
 > Optional: the `caveman` skill (github.com/JuliusBrussee/caveman) compresses responses to
 > save tokens (~75%) while keeping all technical substance, code, and error text intact.
