@@ -32,6 +32,12 @@ This document is the fuller rationale + reference.
 |---|--------|------|
 | 9 | Operational Safety | [policies/safety.md](policies/safety.md) |
 
+**Process:**
+
+| # | Policy | File |
+|---|--------|------|
+| 12 | Issue Tracking | [policies/issue-tracking.md](policies/issue-tracking.md) |
+
 ## Precedence
 
 1. Explicit, specific user instruction for the current action (can relax merging/branching).
