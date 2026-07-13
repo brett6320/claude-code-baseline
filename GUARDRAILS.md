@@ -32,6 +32,12 @@ This document is the fuller rationale + reference.
 |---|--------|------|
 | 9 | Operational Safety | [policies/safety.md](policies/safety.md) |
 
+## Tooling
+
+- **[skills/update-guardrails](skills/update-guardrails/SKILL.md)** — `/update-guardrails`
+  skill: fetches the latest policies from this repo and reconciles them into local config
+  (diff → confirm → apply). Copy to `~/.claude/skills/` to install.
+
 ## Precedence
 
 1. Explicit, specific user instruction for the current action (can relax merging/branching).
