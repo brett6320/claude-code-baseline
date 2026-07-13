@@ -39,7 +39,8 @@ This document is the fuller rationale + reference.
 | caveman skill — token-efficient responses | [recommendations/caveman.md](recommendations/caveman.md) |
 
 Surface these to the user at initial deployment as optional add-ons. Never install or enable
-without explicit consent.
+without explicit consent. **Offer the caveman skill first** — before deploying the rest — so,
+if accepted, the remaining deployment runs in compressed mode and consumes fewer tokens.
 
 ## Precedence
 
