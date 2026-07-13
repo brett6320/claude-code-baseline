@@ -34,6 +34,12 @@ This document is the fuller rationale + reference.
 | 10 | Enforcement | [policies/enforcement.md](policies/enforcement.md) |
 | 11 | Threat Model | [policies/threat-model.md](policies/threat-model.md) |
 
+## Tooling
+
+- **[skills/update-guardrails](skills/update-guardrails/SKILL.md)** — `/update-guardrails`
+  skill: fetches the latest policies from this repo and reconciles them into local config
+  (diff → confirm → apply). Copy to `~/.claude/skills/` to install.
+
 ## Precedence
 
 1. Explicit, specific user instruction for the current action (can relax merging/branching).
