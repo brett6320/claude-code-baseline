@@ -40,6 +40,12 @@ This document is the fuller rationale + reference.
   skill: fetches the latest policies from this repo and reconciles them into local config
   (diff → confirm → apply). Copy to `~/.claude/skills/` to install.
 
+**Process:**
+
+| # | Policy | File |
+|---|--------|------|
+| 12 | Issue Tracking | [policies/issue-tracking.md](policies/issue-tracking.md) |
+
 ## Precedence
 
 1. Explicit, specific user instruction for the current action (can relax merging/branching).
