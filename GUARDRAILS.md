@@ -36,6 +36,13 @@ This document is the fuller rationale + reference.
 
 ## Tooling
 
+- **Injection & egress hooks** (policies 9/11) — native-first config in
+  [hooks/settings.injection-hardening.json](hooks/settings.injection-hardening.json):
+  - [hooks/block-pipe-to-shell.sh](hooks/block-pipe-to-shell.sh) — PreToolUse deny:
+    blocks `curl|bash`, `eval "$(curl …)"`, `bash <(curl …)`, pipe-to-interpreter.
+  - [hooks/sanitize-fetched-content.py](hooks/sanitize-fetched-content.py) — PostToolUse:
+    strips Unicode-Tags / zero-width / bidi smuggling from fetched content (the gap WebFetch
+    context-isolation leaves).
 - **[skills/update-guardrails](skills/update-guardrails/SKILL.md)** — `/update-guardrails`
   skill: fetches the latest policies from this repo and reconciles them into local config
   (diff → confirm → apply). Copy to `~/.claude/skills/` to install.

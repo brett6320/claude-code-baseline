@@ -34,7 +34,7 @@ Rely on the environment layer for anything that must not fail. See [enforcement.
 
 | Threat | Mitigating policy |
 |--------|-------------------|
-| Prompt injection | safety.md (data-not-instructions), enforcement.md (isolated context) |
+| Prompt injection | safety.md (data-not-instructions), enforcement.md (egress deny + pipe-to-shell hook, isolated context) |
 | Secret disclosure | secrets.md, enforcement.md (deny `.env` reads) |
 | Supply chain | scope-and-deps.md (slopsquatting), enforcement.md (CI hash pinning) |
 | Excessive agency | safety.md (least privilege), merging.md, enforcement.md (permission tiers) |
