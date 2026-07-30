@@ -1,0 +1,64 @@
+{
+  "//": "Reference settings.json — injection & egress hardening (Policy 10/11). Native-first.",
+  "//order": "Prefer the OS-sandbox egress allowlist over the Bash denylist: it breaks the trifecta egress leg for ALL commands, not just curl/wget. The hooks cover the two gaps native features leave: pipe-to-shell when the sandbox is off, and invisible-char smuggling in fetched content.",
+
+  "//sandbox": "strictAllowlist denies any unlisted domain instead of prompting (managed settings only). This is the deterministic egress leg-break — the single strongest control here.",
+  "sandbox": {
+    "enabled": true,
+    "network": {
+      "allowedDomains": ["github.com", "api.github.com", "registry.npmjs.org"],
+      "strictAllowlist": true
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" }
+      ]
+    }
+  },
+
+  "//permissions": "Deny wins over allow. WebFetch scoped to an allowlist; fetchers kept off auto-approve as a belt-and-suspenders fallback for when the sandbox is disabled.",
+  "permissions": {
+    "deny": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(nc:*)",
+      "Bash(ncat:*)"
+    ],
+    "ask": [
+      "Bash(ssh:*)",
+      "Bash(scp:*)"
+    ],
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.anthropic.com)"
+    ],
+    "disableBypassPermissionsMode": "disable"
+  },
+
+  "//mcp": "Lock the set of MCP servers so a poisoned/renamed server can't be silently added. managed-mcp.json (OS path) gives exclusive control; allowManagedMcpServersOnly locks the allowlist to managed scope. Native has NO tool-description drift detection — that's the SessionStart-hash gap noted in enforcement.md.",
+  "allowManagedMcpServersOnly": true,
+
+  "//managed": "In managed (MDM) settings, lock the rules so user/project scopes can't relax them (disableBypassPermissionsMode lives inside permissions, above).",
+  "allowManagedPermissionRulesOnly": true,
+
+  "//hooks": "Copy both scripts to ~/.claude/hooks/. PreToolUse blocks pipe-to-shell forms globs can't express (fallback when sandbox off). PostToolUse strips invisible-char injection vectors from fetched content — the one indirect-injection gap Claude Code's WebFetch isolation does NOT cover.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "sh \"$HOME/.claude/hooks/block-pipe-to-shell.sh\"" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$HOME/.claude/hooks/sanitize-fetched-content.py\"" }
+        ]
+      }
+    ]
+  }
+}
