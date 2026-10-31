@@ -104,6 +104,31 @@ the built-ins leave. Drop-in config for everything below:
 allowlist stops new servers but not a trusted one mutating its description), and a coarse
 taint gate (PreToolUse `ask` on push/deploy/delete once the turn ingested untrusted content).
 
+## Scope confinement (approval fatigue vs. blast radius)
+
+Prompting on every `ls` trains the human to click "yes"; auto-allowing `ls` everywhere lets
+an injected command read anything the user can. Resolve the tension by scoping on **path**,
+not just on command name — something permission globs (`Bash(ls *)`) cannot express.
+[`hooks/scope-bash.py`](../hooks/scope-bash.py) (PreToolUse, config in
+[`hooks/settings.scope-bash.json`](../hooks/settings.scope-bash.json)):
+
+- **allow** — allowlisted read-only / light file-op tools (`ls cat grep find mv cp mkdir rm`
+  (non-recursive) `sed awk jq`, read-only `git`/`gh` subcommands, …) when *every* path argument,
+  redirect target and `cd` resolves (symlinks followed) inside an in-scope root: the project
+  dir, the session scratchpad, or `~/.claude`. Script execution is allowed only when the script
+  itself lives in scratch space; code execution inside the project still prompts.
+- **ask** — any path outside those roots. Forces a prompt even where a settings allow rule
+  (e.g. `Bash(git pull *)`) would otherwise auto-approve.
+- **no decision** (normal flow) — anything it cannot reason about: `$` expansion, backticks,
+  `$(…)`, `<(…)`, unterminated heredocs, `sudo`, interpreters with inline code, unknown tools,
+  sensitive paths (`.env*`, keys, `~/.claude/.local`, `.claude/wrappers`), and any **write**
+  (redirect, `sed -i`, `tee`, `mv/cp/rm/touch/chmod`) to protected config: `.claude/`, `.git/`,
+  `CLAUDE.md`, `.mcp.json`, shell rc files. Reads of those stay allowed; a hook that can
+  rewrite its own settings is no guardrail.
+
+Fail-closed: an unparseable command never yields *allow*. Other hooks' deny/ask outrank its
+allow. Test matrix: [`hooks/tests/scope-bash.test.sh`](../hooks/tests/scope-bash.test.sh).
+
 ## Sandboxing
 
 - OS-level sandbox (Seatbelt/macOS, bubblewrap/Linux) restricts Bash filesystem + network.

@@ -45,6 +45,11 @@ This document is the fuller rationale + reference.
     (the gap WebFetch context-isolation leaves; Read and MCP have no isolation).
   - [hooks/secret-leak-check.sh](hooks/secret-leak-check.sh) — PostToolUse: pauses the turn on a
     live-credential pattern in tool output until the user replies `ROTATED` (policy 5).
+- **Scope confinement** (policy 10) — [hooks/scope-bash.py](hooks/scope-bash.py) +
+  [hooks/settings.scope-bash.json](hooks/settings.scope-bash.json): PreToolUse hook that
+  auto-allows innocuous commands (`ls cat mv grep`, read-only `git`, …) only when every path is
+  inside the project / scratchpad / `~/.claude`; forces a prompt for paths outside; falls through
+  for code execution and anything unparseable. Tests: [hooks/tests/scope-bash.test.sh](hooks/tests/scope-bash.test.sh).
 - **[skills/update-guardrails](skills/update-guardrails/SKILL.md)** — `/update-guardrails`
   skill: fetches the latest policies from this repo and reconciles them into local config
   (diff → confirm → apply). Copy to `~/.claude/skills/` to install.
