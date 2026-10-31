@@ -19,3 +19,16 @@ Change only what the task needs. Do not expand scope without asking.
 ## Why
 
 Minimal, in-style diffs are reviewable and safe. Scope creep hides risk and inflates review.
+
+## Enforcement
+
+- `permissions.ask` rules for package installers (`npm install *`, `pip install *`,
+  `brew install *`, `cargo add *`, `gem install *`, …) — recommended set in
+  [enforcement.md](enforcement.md#permission-rules-settingsjson). Installers are not in the
+  [`scope-bash.py`](../hooks/scope-bash.py) allowlist, so they always prompt.
+- The sandbox egress allowlist limits which registries a sandboxed install can even reach.
+- Lockfile pinning and hash verification belong in the project's CI (not mechanized here).
+
+## Related
+
+[safety.md](safety.md#supply-chain), [threat-model.md](threat-model.md) (OWASP LLM03).

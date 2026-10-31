@@ -25,7 +25,8 @@ Rely on the environment layer for anything that must not fail. See [enforcement.
 - **OWASP LLM Top 10** — LLM01 Prompt Injection, LLM02 Sensitive Info Disclosure,
   LLM03 Supply Chain, LLM05 Improper Output Handling, LLM06 Excessive Agency.
   <https://genai.owasp.org/llm-top-10/>
-- **OWASP Agentic Top 10** — adds goal hijacking, tool misuse, memory/context poisoning.
+- **OWASP Agentic Security Initiative** (Top 10 for agentic apps, in progress) — adds goal
+  hijacking, tool misuse, memory/context poisoning.
 - **NIST AI RMF 1.0** (GOVERN/MAP/MEASURE/MANAGE) — <https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf>
 - **NIST SP 800-218A** (SSDF for GenAI) — review all code, human or AI-generated.
 - **NIST AI 600-1** (GenAI Profile) — confabulation, privacy, misuse risks.
@@ -34,8 +35,9 @@ Rely on the environment layer for anything that must not fail. See [enforcement.
 
 | Threat | Mitigating policy |
 |--------|-------------------|
-| Prompt injection | safety.md (data-not-instructions), enforcement.md (egress deny + pipe-to-shell hook, isolated context) |
-| Secret disclosure | secrets.md, enforcement.md (deny `.env` reads) |
-| Supply chain | scope-and-deps.md (slopsquatting), enforcement.md (CI hash pinning) |
-| Excessive agency | safety.md (least privilege), merging.md, enforcement.md (permission tiers) |
-| Improper output handling | verification-honesty.md, safety.md (input validation) |
+| Prompt injection | safety.md (data-not-instructions); enforcement.md: sandbox egress allowlist, `guardrails.sh` pipe-to-shell deny, `sanitize-fetched-content.py` on WebFetch/Read/MCP, WebFetch context isolation |
+| Secret disclosure | secrets.md; enforcement.md: `Read(...)` denies, `guardrails.sh` shell-read deny, `sandbox.credentials.files`, `secret-leak-check.sh` ROTATED gate |
+| Supply chain | scope-and-deps.md (slopsquatting, `permissions.ask` on installers); sandbox egress allowlist limits reachable registries |
+| Excessive agency | safety.md (least privilege), merging.md, destructive-ops.md; enforcement.md: `scope-bash.py` path-scoped approvals, auto-mode prompts, `guardrails.sh` ask gates |
+| Improper output handling | verification-honesty.md, safety.md (input validation), `sanitize-fetched-content.py` |
+| Goal hijack / context poisoning | safety.md (fetched content is data); enforcement.md roadmap: MCP tool-description drift detection, taint gate |

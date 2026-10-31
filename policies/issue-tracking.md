@@ -39,3 +39,12 @@ If either holds, this policy is in force for the work at hand.
 The tracker is the audit log and the human-in-the-loop gate. An issue-first workflow means no
 live change is untracked; status discipline keeps reviewers informed; comment-only updates keep
 the history intact and the original ask unaltered.
+
+## Enforcement
+
+Prose-only (tracker APIs differ). The MCP/tracker tools are gated by normal permissions; the
+"issue first" ordering is a model-layer rule.
+
+## Related
+
+[attribution.md](attribution.md) (this is its one carve-out), [safety.md](safety.md#audit-trail).

@@ -21,3 +21,12 @@ unless the user explicitly instructs otherwise.
 
 Protected branches stay clean. Review happens in PRs. Mistakes stay isolated on a
 branch.
+
+## Enforcement
+
+[`hooks/guardrails.sh`](../hooks/guardrails.sh) denies `git commit` while `HEAD` is `main` or
+`master`. Branch creation, pushes, and PR operations are not gated (see Allowed above).
+
+## Related
+
+[merging.md](merging.md) — the PR is where review and the merge gate happen.

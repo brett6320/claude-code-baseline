@@ -21,3 +21,15 @@ not create it, surface that instead of proceeding.
 ## Why
 
 Destructive ops are hard or impossible to reverse. A moment's confirmation beats data loss.
+
+## Enforcement
+
+- [`hooks/guardrails.sh`](../hooks/guardrails.sh) forces a prompt on `rm -rf`, `git reset --hard`,
+  `git clean -f`, and force pushes.
+- [`hooks/scope-bash.py`](../hooks/scope-bash.py) never auto-allows recursive `rm`, writes to
+  `.git/`, or any path outside the project / scratchpad.
+- DB drops, destructive migrations, and overwrites of pre-existing files are prose-only.
+
+## Related
+
+[merging.md](merging.md), [safety.md](safety.md#rollback-readiness).
