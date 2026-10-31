@@ -103,4 +103,22 @@ t silent 'sed -f script.sed f'
 t silent 'tar xf a.tgz'
 t silent 'chmod +x run.sh && ./run.sh'
 
+# ---- silent: writes to protected config (reads stay allowed)
+t silent 'sed -i "s/deny/allow/" ~/.claude/hooks/guardrails.sh'
+t silent 'sed -i "s/a/b/" .claude/settings.json'
+t silent 'echo x > .claude/settings.local.json'
+t silent 'echo x >> ~/.claude/settings.json'
+t silent 'tee ~/.claude/CLAUDE.md < README.md'
+t silent 'cp hooks/scope-bash.py ~/.claude/hooks/scope-bash.py'
+t silent 'mv .mcp.json .mcp.json.bak'
+t silent 'rm .git/hooks/pre-commit'
+t silent 'touch .git/config'
+t silent 'mkdir -p .claude/skills/x'
+t silent 'echo x > CLAUDE.md'
+t allow 'cat ~/.claude/settings.json'
+t allow 'cat ~/.claude/hooks/guardrails.sh | head'
+t allow 'ls -la .claude .git'
+t allow 'cat CLAUDE.md .mcp.json'
+t allow 'git diff .claude/settings.local.json'
+
 exit $fail

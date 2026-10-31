@@ -89,7 +89,10 @@ not just on command name — something permission globs (`Bash(ls *)`) cannot ex
   (e.g. `Bash(git pull *)`) would otherwise auto-approve.
 - **no decision** (normal flow) — anything it cannot reason about: `$` expansion, backticks,
   `$(…)`, `<(…)`, unterminated heredocs, `sudo`, interpreters with inline code, unknown tools,
-  sensitive paths (`.env*`, keys, `~/.claude/.local`, `.claude/wrappers`).
+  sensitive paths (`.env*`, keys, `~/.claude/.local`, `.claude/wrappers`), and any **write**
+  (redirect, `sed -i`, `tee`, `mv/cp/rm/touch/chmod`) to protected config: `.claude/`, `.git/`,
+  `CLAUDE.md`, `.mcp.json`, shell rc files. Reads of those stay allowed; a hook that can
+  rewrite its own settings is no guardrail.
 
 Fail-closed: an unparseable command never yields *allow*. Other hooks' deny/ask outrank its
 allow. Test matrix: [`hooks/tests/scope-bash.test.sh`](../hooks/tests/scope-bash.test.sh).

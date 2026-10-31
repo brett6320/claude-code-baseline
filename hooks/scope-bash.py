@@ -12,7 +12,8 @@ Goal: cut approval fatigue without widening the blast radius.
   silent : (no decision -> normal permission flow) anything we cannot reason about:
            $ expansions, backticks, $(...), process substitution, sudo, interpreters
            with inline code, unknown tools, code execution inside the project,
-           sensitive paths (.env, keys, ~/.claude/.local, .claude/wrappers).
+           sensitive paths (.env, keys, ~/.claude/.local, .claude/wrappers), and any
+           WRITE to protected config (.claude/, .git/, CLAUDE.md, .mcp.json, shell rc).
 
 Fail-closed by construction: an unparseable command never yields "allow".
 Deny/ask from other PreToolUse hooks (guardrails.sh) take precedence over allow.
@@ -55,6 +56,21 @@ SENSITIVE_BASENAME = re.compile(
     r"id_rsa.*|id_ed25519.*|.*\.(pem|key|p12|pfx|token|secret))$", re.I)
 SENSITIVE_OK = re.compile(r"^\.env\.(example|sample|template|dist)$", re.I)
 PSEUDO = {"/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/fd"}
+
+# Paths that may be READ in scope but must never be WRITTEN without a prompt:
+# Claude Code's own config/hooks, git internals, shell rc files. A hook that can
+# rewrite its own settings is no guardrail.
+PROTECTED_COMPONENTS = {".claude", ".git", ".claude-plugin"}
+PROTECTED_BASENAMES = {"CLAUDE.md", ".mcp.json", ".claude.json", "settings.json",
+                       "settings.local.json", "managed-settings.json", ".zshrc", ".bashrc",
+                       ".bash_profile", ".zprofile", ".profile", ".zshenv", ".gitconfig"}
+WRITE_TOOLS = {"mv", "cp", "rm", "rmdir", "mkdir", "touch", "ln", "chmod", "truncate", "tee"}
+
+def is_protected(rp):
+    parts = rp.split(os.sep)
+    if any(c in PROTECTED_COMPONENTS for c in parts[:-1]) or parts[-1] in PROTECTED_COMPONENTS:
+        return True
+    return parts[-1] in PROTECTED_BASENAMES
 
 def classify_path(word, curdir, roots, scratch):
     """-> ('in'|'scratch'|'out'|'sensitive', abspath)"""
@@ -360,6 +376,9 @@ def eval_argv(argv, ctx):
 
     exe, script = exe_name(argv[0])
     args = argv[1:]
+    if exe in WRITE_TOOLS or (exe == "sed" and any(a in ("-i", "--in-place") or a.startswith(("-i", "--in-place=")) for a in args)) \
+       or (exe == "sort" and "-o" in args) or (exe == "find" and "-delete" in args):
+        ctx["writes"].extend(a for a in nondash(args))
 
     # Collect candidate paths from args (non-options, and --opt=value values).
     for a in args:
@@ -445,8 +464,12 @@ def main():
         tokens = tokenize(normalize(cmd))
         curdir = cwd
         for argv, redirs in segments(tokens):
-            ctx = {"paths": list(redirs), "scripts": [], "cd": None}
+            ctx = {"paths": list(redirs), "scripts": [], "cd": None, "writes": list(redirs)}
             eval_argv(argv, ctx)
+            for w in ctx["writes"]:
+                _, rp = classify_path(w, curdir, roots, scratch)
+                if is_protected(rp):
+                    raise NoDecision  # write to Claude config / git internals / rc -> prompt
             for p in ctx["paths"]:
                 kind, rp = classify_path(p, curdir, roots, scratch)
                 if kind == "out":
