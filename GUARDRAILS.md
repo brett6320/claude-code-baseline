@@ -43,6 +43,11 @@ This document is the fuller rationale + reference.
   - [hooks/sanitize-fetched-content.py](hooks/sanitize-fetched-content.py) — PostToolUse:
     strips Unicode-Tags / zero-width / bidi smuggling from fetched content (the gap WebFetch
     context-isolation leaves).
+- **Scope confinement** (policy 10) — [hooks/scope-bash.py](hooks/scope-bash.py) +
+  [hooks/settings.scope-bash.json](hooks/settings.scope-bash.json): PreToolUse hook that
+  auto-allows innocuous commands (`ls cat mv grep`, read-only `git`, …) only when every path is
+  inside the project / scratchpad / `~/.claude`; forces a prompt for paths outside; falls through
+  for code execution and anything unparseable. Tests: [hooks/tests/scope-bash.test.sh](hooks/tests/scope-bash.test.sh).
 - **[skills/update-guardrails](skills/update-guardrails/SKILL.md)** — `/update-guardrails`
   skill: fetches the latest policies from this repo and reconciles them into local config
   (diff → confirm → apply). Copy to `~/.claude/skills/` to install.

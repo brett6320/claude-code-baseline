@@ -1,0 +1,19 @@
+{
+  "//": "Reference settings.json fragment — path-scoped Bash auto-approval (Policy 10, scope confinement).",
+  "//how": "Copy hooks/scope-bash.py to ~/.claude/hooks/ and merge this PreToolUse entry alongside guardrails.sh. The hook returns allow for in-scope allowlisted commands, ask for any path outside project / scratchpad / ~/.claude, and no decision for everything else. Deny/ask from other hooks win over its allow.",
+  "//scope": "In-scope roots: $CLAUDE_PROJECT_DIR, /private/tmp/claude-<uid>/… (session scratchpad), ~/.claude (minus ~/.claude/.local), permissions.additionalDirectories, and $CLAUDE_SCOPE_EXTRA_ROOTS. Extend the tool allowlist with $CLAUDE_SCOPE_EXTRA_CMDS (comma-separated).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/hooks/scope-bash.py\"",
+            "statusMessage": "Checking command scope"
+          }
+        ]
+      }
+    ]
+  }
+}
