@@ -53,6 +53,14 @@ the built-ins leave. Drop-in config for everything below:
   scope and ignored in project `.claude/settings*.json` (v2.1.219+). This is the trifecta egress
   leg-break (threat-model.md) and the single strongest control here. Prefer it over a fetcher
   denylist.
+  Operational notes once the sandbox is on: (1) sandboxed Bash cannot read your home dir except
+  listed sub-paths, so a git signing/push key stored outside the project needs
+  `sandbox.excludedCommands: ["git commit *", "git push *"]` (they still go through the
+  permission gate; the pattern matches the *whole* command, so issue `git commit` as a standalone
+  command, not inside a `cd … && …` chain); (2) leave `autoAllowBashIfSandboxed: false` or every
+  sandboxed command is auto-approved and the scope hook's prompts disappear; (3) prefer
+  `credentials.files` `deny` entries for key files by name rather than all of `~/.ssh`, so
+  `known_hosts` stays readable.
 - **WebFetch isolation** — fetched pages already run in a **separate context window** and are
   treated as data, not instructions. Scope which hosts are reachable with
   `WebFetch(domain:…)` allow rules. No rebuild needed; document that it exists.

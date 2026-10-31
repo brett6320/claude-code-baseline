@@ -5,13 +5,16 @@
   "//sandbox": "sandbox.enabled is REQUIRED — the sandbox is off by default and allowedDomains alone does nothing. strictAllowlist denies any unlisted domain instead of prompting; honored from user, managed, or --settings scope, ignored in project .claude/settings*.json. This is the deterministic egress leg-break — the single strongest control here. credentials.files mode deny hides those paths from sandboxed commands; mode mask needs experimental network.tlsTerminate and degrades to deny on macOS/Windows.",
   "sandbox": {
     "enabled": true,
+    "autoAllowBashIfSandboxed": false,
+    "excludedCommands": ["git commit *", "git push *"],
     "network": {
       "allowedDomains": ["github.com", "api.github.com", "registry.npmjs.org"],
       "strictAllowlist": true
     },
     "credentials": {
       "files": [
-        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.ssh/id_rsa", "mode": "deny" },
+        { "path": "~/.ssh/id_ed25519", "mode": "deny" },
         { "path": "~/.aws", "mode": "deny" }
       ]
     }
