@@ -15,10 +15,17 @@ be argued out of prose; it cannot bypass a deny rule or a PreToolUse hook.
 
 ## Permission rules (`settings.json`)
 
-- Three tiers: read-only (auto), Bash/tools (approve per-session), file writes (per-session).
-- **Deny wins** at every level, overriding any allow.
+- Modes: **auto** is now the default for interactive sessions (v2.1.283+) — a classifier
+  decides routine calls and prompts on risky ones. `default`, `acceptEdits`, `plan`, `dontAsk`
+  and `bypassPermissions` remain. Tune auto mode with `autoMode.environment`/`allow`; its
+  classifier is probabilistic (misses a meaningful share of overeager actions), so it is
+  not a hard limit — hooks and deny rules are.
+- Rule order: **deny > ask > allow**, at every level. Hook decisions follow the same order
+  (deny > defer > ask > allow) and a hook cannot override a settings deny/ask rule.
 - Precedence: managed > CLI args > local project > shared project > user.
+- "Don't ask again" grants are per repo and per command prefix, not per session.
 - Allowlist safe Bash (`Bash(npm run *)`) to cut approval fatigue; deny dangerous forms.
+  Globs cannot scope by path — see *Scope confinement* below for the hook that can.
 - `curl` / `wget` are not auto-approved — keep it that way.
 
 ## Hooks
@@ -39,18 +46,34 @@ the built-ins leave. Drop-in config for everything below:
 
 **Use the native controls (deterministic, OS-enforced):**
 
-- **Sandbox egress allowlist** — `sandbox.network.strictAllowlist: true` + `allowedDomains`
-  denies every unlisted domain at the OS proxy, for *all* Bash commands, not just `curl`.
-  This is the trifecta egress leg-break (threat-model.md) and the single strongest control
-  here. Prefer it over a fetcher denylist.
+- **Sandbox egress allowlist** — `sandbox.enabled: true` **plus** `sandbox.network.strictAllowlist:
+  true` + `allowedDomains` denies every unlisted domain at the OS proxy, for *all* Bash
+  commands, not just `curl`. The sandbox is **off by default**; listing `allowedDomains` without
+  `enabled: true` does nothing. `strictAllowlist` is honored from user, managed, or `--settings`
+  scope and ignored in project `.claude/settings*.json` (v2.1.219+). This is the trifecta egress
+  leg-break (threat-model.md) and the single strongest control here. Prefer it over a fetcher
+  denylist.
+  Operational notes once the sandbox is on: (1) sandboxed Bash cannot read your home dir except
+  listed sub-paths, so a git signing/push key stored outside the project needs
+  `sandbox.excludedCommands: ["git commit *", "git push *"]` (they still go through the
+  permission gate; the pattern matches the *whole* command, so issue `git commit` as a standalone
+  command, not inside a `cd … && …` chain); (2) leave `autoAllowBashIfSandboxed: false` or every
+  sandboxed command is auto-approved and the scope hook's prompts disappear; (3) prefer
+  `credentials.files` `deny` entries for key files by name rather than all of `~/.ssh`, so
+  `known_hosts` stays readable.
 - **WebFetch isolation** — fetched pages already run in a **separate context window** and are
   treated as data, not instructions. Scope which hosts are reachable with
   `WebFetch(domain:…)` allow rules. No rebuild needed; document that it exists.
-- **MCP server lock** — `allowManagedMcpServersOnly` + OS `managed-mcp.json` pin the approved
-  server set so a poisoned or renamed server can't be added silently.
-- **Credential masking** — `sandbox.credentials.envVars[].mode: "mask"` gives sandboxed
-  commands sentinel values; the real secret is injected only on allowed hosts (ties to
-  secrets.md).
+- **MCP server lock** — the OS-path `managed-mcp.json` gives exclusive control of the server
+  set so a poisoned or renamed server can't be added silently. `allowedMcpServers` /
+  `deniedMcpServers` in managed settings are the allow/deny lists; `allowManagedMcpServersOnly`
+  only restricts *where* the allowlist is read from and is a no-op without a managed
+  `allowedMcpServers`.
+- **Credential protection** — `sandbox.credentials.files[]` / `envVars[]` with `mode: "deny"`
+  hides a secret from sandboxed commands (ready today). `mode: "mask"` (sentinel inside,
+  real value injected at the proxy for allowed hosts) requires the **experimental**
+  `sandbox.network.tlsTerminate`, and on macOS/Windows degrades to `deny`. Start with `deny`
+  (ties to secrets.md).
 - **Lock it in managed settings** — `allowManagedPermissionRulesOnly`,
   `permissions.disableBypassPermissionsMode: "disable"` so no user/project scope relaxes it.
 
@@ -60,12 +83,21 @@ the built-ins leave. Drop-in config for everything below:
   a permission glob can't express these, and they still bite when the sandbox is off.
   PreToolUse [`hooks/block-pipe-to-shell.sh`](../hooks/block-pipe-to-shell.sh) — exit 2 denies,
   hands the model the reason.
-- **Invisible-character smuggling** in fetched content: WebFetch isolation does *not* strip
+- **Invisible-character smuggling** in tool output: WebFetch isolation does *not* strip
   Unicode Tags (U+E0000–E007F), zero-width, or bidi controls that hide instructions from a
-  human reviewer. PostToolUse [`hooks/sanitize-fetched-content.py`](../hooks/sanitize-fetched-content.py)
-  rewrites the tool output via `updatedToolOutput`, removing those classes before the model
-  reads it, and leaves a visible breadcrumb of what it stripped. Fail-open (a parse error
-  never breaks the turn).
+  human reviewer — and repo files (Read) and MCP results get no isolation at all. PostToolUse
+  [`hooks/sanitize-fetched-content.py`](../hooks/sanitize-fetched-content.py), wired with matcher
+  `WebFetch|Read|mcp__.*`, rewrites the output via `updatedToolOutput`, removing those classes
+  before the model reads it, and appends a visible breadcrumb. It is shape-preserving (no new
+  keys, no type changes) because built-in tools silently ignore an `updatedToolOutput` that does
+  not match their schema. Fail-open (a parse error never breaks the turn). Tests:
+  [`hooks/tests/sanitize.test.sh`](../hooks/tests/sanitize.test.sh).
+- **Credential leak detection**: PostToolUse [`hooks/secret-leak-check.sh`](../hooks/secret-leak-check.sh)
+  (matcher `Bash|Read|WebFetch`) blocks the turn when output matches a live-credential pattern
+  (private key blocks, AWS/GitHub/Slack/OpenAI-style tokens) and requires the user to reply
+  `ROTATED` (secrets.md incident response). Note: settings `Read(...)` deny rules do **not** stop
+  shell reads via Bash — pair them with the dot-env / key-file deny in `guardrails.sh` and with
+  `sandbox.credentials.files`.
 
 **Still not native, still worth building** (roadmap, not shipped here): MCP tool-description
 *drift* detection (SessionStart hash of tool schemas vs a committed baseline — the server

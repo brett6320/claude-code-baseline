@@ -40,9 +40,11 @@ This document is the fuller rationale + reference.
   [hooks/settings.injection-hardening.json](hooks/settings.injection-hardening.json):
   - [hooks/block-pipe-to-shell.sh](hooks/block-pipe-to-shell.sh) — PreToolUse deny:
     blocks `curl|bash`, `eval "$(curl …)"`, `bash <(curl …)`, pipe-to-interpreter.
-  - [hooks/sanitize-fetched-content.py](hooks/sanitize-fetched-content.py) — PostToolUse:
-    strips Unicode-Tags / zero-width / bidi smuggling from fetched content (the gap WebFetch
-    context-isolation leaves).
+  - [hooks/sanitize-fetched-content.py](hooks/sanitize-fetched-content.py) — PostToolUse on
+    `WebFetch|Read|mcp__.*`: strips Unicode-Tags / zero-width / bidi smuggling from tool output
+    (the gap WebFetch context-isolation leaves; Read and MCP have no isolation).
+  - [hooks/secret-leak-check.sh](hooks/secret-leak-check.sh) — PostToolUse: pauses the turn on a
+    live-credential pattern in tool output until the user replies `ROTATED` (policy 5).
 - **Scope confinement** (policy 10) — [hooks/scope-bash.py](hooks/scope-bash.py) +
   [hooks/settings.scope-bash.json](hooks/settings.scope-bash.json): PreToolUse hook that
   auto-allows innocuous commands (`ls cat mv grep`, read-only `git`, …) only when every path is
