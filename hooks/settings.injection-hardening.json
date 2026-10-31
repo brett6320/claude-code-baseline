@@ -2,7 +2,7 @@
   "//": "Reference settings.json — injection & egress hardening (Policy 10/11). Native-first.",
   "//order": "Prefer the OS-sandbox egress allowlist over the Bash denylist: it breaks the trifecta egress leg for ALL commands, not just curl/wget. The hooks cover the two gaps native features leave: pipe-to-shell when the sandbox is off, and invisible-char smuggling in fetched content.",
 
-  "//sandbox": "strictAllowlist denies any unlisted domain instead of prompting (managed settings only). This is the deterministic egress leg-break — the single strongest control here.",
+  "//sandbox": "sandbox.enabled is REQUIRED — the sandbox is off by default and allowedDomains alone does nothing. strictAllowlist denies any unlisted domain instead of prompting; honored from user, managed, or --settings scope, ignored in project .claude/settings*.json. This is the deterministic egress leg-break — the single strongest control here. credentials.files mode deny hides those paths from sandboxed commands; mode mask needs experimental network.tlsTerminate and degrades to deny on macOS/Windows.",
   "sandbox": {
     "enabled": true,
     "network": {
@@ -36,13 +36,14 @@
     "disableBypassPermissionsMode": "disable"
   },
 
-  "//mcp": "Lock the set of MCP servers so a poisoned/renamed server can't be silently added. managed-mcp.json (OS path) gives exclusive control; allowManagedMcpServersOnly locks the allowlist to managed scope. Native has NO tool-description drift detection — that's the SessionStart-hash gap noted in enforcement.md.",
+  "//mcp": "Lock the set of MCP servers so a poisoned/renamed server can't be silently added. The real lock is the OS-path managed-mcp.json (exclusive control). In managed settings, allowedMcpServers/deniedMcpServers are the lists; allowManagedMcpServersOnly only restricts where the allowlist is read from and is a no-op without a managed allowedMcpServers — set both. Native has NO tool-description drift detection — that's the SessionStart-hash gap noted in enforcement.md.",
+  "allowedMcpServers": [],
   "allowManagedMcpServersOnly": true,
 
   "//managed": "In managed (MDM) settings, lock the rules so user/project scopes can't relax them (disableBypassPermissionsMode lives inside permissions, above).",
   "allowManagedPermissionRulesOnly": true,
 
-  "//hooks": "Copy both scripts to ~/.claude/hooks/. PreToolUse blocks pipe-to-shell forms globs can't express (fallback when sandbox off). PostToolUse strips invisible-char injection vectors from fetched content — the one indirect-injection gap Claude Code's WebFetch isolation does NOT cover.",
+  "//hooks": "Copy both scripts to ~/.claude/hooks/. PreToolUse blocks pipe-to-shell forms globs can't express (fallback when sandbox off). PostToolUse strips invisible-char injection vectors from WebFetch, Read and MCP output — the indirect-injection gap WebFetch context-isolation does NOT cover, and repo files / MCP results get no isolation at all. secret-leak-check.sh pauses the turn when tool output matches a live-credential pattern (secrets.md incident response).",
   "hooks": {
     "PreToolUse": [
       {
@@ -54,9 +55,15 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "WebFetch",
+        "matcher": "WebFetch|Read|mcp__.*",
         "hooks": [
           { "type": "command", "command": "python3 \"$HOME/.claude/hooks/sanitize-fetched-content.py\"" }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|WebFetch",
+        "hooks": [
+          { "type": "command", "command": "sh \"$HOME/.claude/hooks/secret-leak-check.sh\"" }
         ]
       }
     ]

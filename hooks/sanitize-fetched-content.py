@@ -20,7 +20,12 @@ Contract (Claude Code PostToolUse):
 
 Fail-open by design: a malformed event or parse error exits 0 with no output — the
 worst case is unsanitized content, i.e. the same as not having the hook. It never
-breaks the session. Wire it to WebFetch (and optionally MCP tools) in settings.json.
+breaks the session. Wire it to WebFetch, Read and MCP tools in settings.json
+(matcher "WebFetch|Read|mcp__.*") — repo files and MCP results are injection vectors too.
+
+Schema safety: built-in tools silently ignore an updatedToolOutput that does not match
+their output schema, so this never adds keys or changes types. The breadcrumb is appended
+to the string field that had the most characters removed.
 """
 import json
 import re
@@ -40,19 +45,35 @@ _STRIP = re.compile(
 )
 
 _removed = 0
+_worst = {"path": None, "n": 0}
 
 
-def scrub(value):
-    """Recursively strip invisible chars from every string in a JSON value."""
+def scrub(value, path=()):
+    """Recursively strip invisible chars from every string in a JSON value.
+    Shape-preserving: same keys, same types, same list lengths."""
     global _removed
     if isinstance(value, str):
         cleaned = _STRIP.sub("", value)
-        _removed += len(value) - len(cleaned)
+        n = len(value) - len(cleaned)
+        _removed += n
+        if n > _worst["n"]:
+            _worst.update(path=path, n=n)
         return cleaned
     if isinstance(value, list):
-        return [scrub(v) for v in value]
+        return [scrub(v, path + (i,)) for i, v in enumerate(value)]
     if isinstance(value, dict):
-        return {k: scrub(v) for k, v in value.items()}
+        return {k: scrub(v, path + (k,)) for k, v in value.items()}
+    return value
+
+
+def append_at(value, path, suffix):
+    """Append suffix to the string at `path` inside value (in place for containers)."""
+    if not path:
+        return value + suffix
+    node = value
+    for key in path[:-1]:
+        node = node[key]
+    node[path[-1]] = node[path[-1]] + suffix
     return value
 
 
@@ -69,12 +90,13 @@ def main():
     if _removed == 0:
         sys.exit(0)  # nothing hidden — leave output untouched
 
-    # Leave a visible breadcrumb so the model (and transcript) show sanitization happened.
-    note = f"\n\n[guardrails: removed {_removed} invisible/bidi character(s) from fetched content]"
-    if isinstance(cleaned, str):
-        cleaned += note
-    elif isinstance(cleaned, dict):
-        cleaned.setdefault("_guardrails_note", note.strip())
+    # Visible breadcrumb so the model (and transcript) show sanitization happened,
+    # appended to the most-affected string so the output shape is unchanged.
+    note = f"\n\n[guardrails: removed {_removed} invisible/bidi character(s) from tool output]"
+    try:
+        cleaned = append_at(cleaned, _worst["path"], note)
+    except (KeyError, IndexError, TypeError):
+        pass  # keep the scrubbed content even if the note cannot be placed
 
     json.dump(
         {
