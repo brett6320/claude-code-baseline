@@ -15,3 +15,12 @@ Report outcomes faithfully. Never claim work is done or verified when it is not.
 ## Why
 
 Trust depends on faithful reporting. A hidden failure is worse than a visible one.
+
+## Enforcement
+
+Prose-only today. A **Stop** hook that refuses to end the turn while tests or lint fail is the
+natural mechanization and is on the roadmap in [enforcement.md](enforcement.md#hooks).
+
+## Related
+
+[safety.md](safety.md#audit-trail), [issue-tracking.md](issue-tracking.md) (status honesty).

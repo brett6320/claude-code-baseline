@@ -35,7 +35,9 @@ approval in the foreground — never let the background agent silently rewrite c
 
 3. **Diff against local config.** Compare the repo policies to:
    - `~/.claude/CLAUDE.md` — the behavioral pointer/summary.
-   - `~/.claude/settings.json` — enforceable rules: `permissions` (allow/deny/ask) and `hooks`.
+   - `~/.claude/settings.json` — enforceable rules: `permissions` (allow/deny/ask), `hooks`,
+     `sandbox`.
+   - `~/.claude/hooks/` — installed hook scripts vs the repo's `hooks/`.
    Identify what is new, changed, or removed in the repo since the local config was last synced.
 
 4. **Propose changes.** Show the user a concise diff: which policies changed and the exact
@@ -45,6 +47,8 @@ approval in the foreground — never let the background agent silently rewrite c
    - Update `~/.claude/CLAUDE.md` — keep it **concise** (a long CLAUDE.md causes rules to be
      ignored); it should point to the repo for full rationale, not inline every policy.
    - Merge (never replace) `permissions` and `hooks` arrays in `settings.json`.
+   - Copy changed hook scripts from `hooks/` to `~/.claude/hooks/` and run `hooks/tests/*.test.sh`
+     before wiring them; with the sandbox on, that copy needs an unsandboxed command.
    - Editing `~/.claude/settings.json` is self-modification and will hit the auto-mode
      permission gate — expect an approval prompt; that is intended.
 

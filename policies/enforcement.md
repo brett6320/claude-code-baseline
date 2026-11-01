@@ -27,14 +27,32 @@ be argued out of prose; it cannot bypass a deny rule or a PreToolUse hook.
 - Allowlist safe Bash (`Bash(npm run *)`) to cut approval fatigue; deny dangerous forms.
   Globs cannot scope by path — see *Scope confinement* below for the hook that can.
 - `curl` / `wget` are not auto-approved — keep it that way.
+- Recommended `permissions.ask` set (policy 7): `npm install *`, `npm i *`, `yarn add *`,
+  `pnpm add *`, `pnpm install *`, `pip install *`, `pip3 install *`, `cargo add *`,
+  `brew install *`, `apt install *`, `apt-get install *`, `gem install *`; plus remote-access
+  tools `ssh *`, `scp *`, `sftp *`, `ansible *`, `aws *`.
+- `permissions.blockReadsOutsideWorkingDirectories: true` keeps the file tools inside the
+  project (policy 5); note it also blocks the Read tool on `~/.claude/settings.json`.
 
 ## Hooks
 
 - **PreToolUse** hooks run before permission prompts: can deny, force-ask, or auto-approve.
   Cannot bypass explicit deny/ask rules.
-- **Stop** hooks gate turn-end on a verification script (tests/lint must pass).
-- Use hooks for zero-exception rules: block force-push, block `.env` reads, auto-format,
-  run tests. This is where policies 2/3/5/6/8 get real teeth.
+- **PostToolUse** hooks can rewrite tool output (`updatedToolOutput`) or block the turn.
+- **Stop** hooks can gate turn-end on a verification script (tests/lint must pass) — roadmap
+  for policy 8, not shipped here.
+
+Shipped inventory (install to `~/.claude/hooks/`; wiring in the two `settings.*.json` fragments):
+
+| Hook | Event / matcher | Enforces |
+|------|-----------------|----------|
+| [`guardrails.sh`](../hooks/guardrails.sh) | PreToolUse `Bash` | 1 attribution, 2 commits, 3 branching, 4 merging, 5 secrets (shell reads, env dump), 6 destructive ops, 9 pipe-to-shell |
+| [`scope-bash.py`](../hooks/scope-bash.py) | PreToolUse `Bash` | 5/6/9 scope confinement — path-scoped allow/ask |
+| [`block-pipe-to-shell.sh`](../hooks/block-pipe-to-shell.sh) | PreToolUse `Bash` | 9 pipe-to-shell only — POSIX-sh subset of `guardrails.sh`; install one or the other |
+| [`sanitize-fetched-content.py`](../hooks/sanitize-fetched-content.py) | PostToolUse `WebFetch\|Read\|mcp__.*` | 9 invisible-character smuggling |
+| [`secret-leak-check.sh`](../hooks/secret-leak-check.sh) | PostToolUse `Bash\|Read\|WebFetch` | 5 incident response (`ROTATED` gate) |
+
+Tests: [`hooks/tests/`](../hooks/tests/). Hook decisions combine as deny > defer > ask > allow.
 
 ## Injection & egress hardening
 
@@ -96,8 +114,8 @@ the built-ins leave. Drop-in config for everything below:
   (matcher `Bash|Read|WebFetch`) blocks the turn when output matches a live-credential pattern
   (private key blocks, AWS/GitHub/Slack/OpenAI-style tokens) and requires the user to reply
   `ROTATED` (secrets.md incident response). Note: settings `Read(...)` deny rules do **not** stop
-  shell reads via Bash — pair them with the dot-env / key-file deny in `guardrails.sh` and with
-  `sandbox.credentials.files`.
+  shell reads via Bash — pair them with the dot-env / key-file deny in
+  [`hooks/guardrails.sh`](../hooks/guardrails.sh) and with `sandbox.credentials.files`.
 
 **Still not native, still worth building** (roadmap, not shipped here): MCP tool-description
 *drift* detection (SessionStart hash of tool schemas vs a committed baseline — the server
@@ -131,8 +149,11 @@ allow. Test matrix: [`hooks/tests/scope-bash.test.sh`](../hooks/tests/scope-bash
 
 ## Sandboxing
 
-- OS-level sandbox (Seatbelt/macOS, bubblewrap/Linux) restricts Bash filesystem + network.
-- Run untrusted/external scripts in a VM or container, not the host.
+- OS-level sandbox (Seatbelt/macOS, bubblewrap/Linux) restricts each Bash command's filesystem
+  and network. Configuration and operational notes are under *Sandbox egress allowlist* above;
+  path-scoped approvals under *Scope confinement*.
+- The sandbox confines commands; it does not isolate the agent itself. For unattended or
+  bypass-permissions sessions, run inside a devcontainer or VM (safety.md → Sandboxing & isolation).
 
 ## Managed settings (teams)
 
