@@ -24,10 +24,13 @@ Destructive ops are hard or impossible to reverse. A moment's confirmation beats
 
 ## Enforcement
 
-- [`hooks/guardrails.sh`](../hooks/guardrails.sh) forces a prompt on `rm -rf`, `git reset --hard`,
-  `git clean -f`, and force pushes.
-- [`hooks/scope-bash.py`](../hooks/scope-bash.py) never auto-allows recursive `rm`, writes to
-  `.git/`, or any path outside the project / scratchpad.
+- [`hooks/guardrails.sh`](../hooks/guardrails.sh) forces a prompt on any recursive `rm` (`-r`,
+  `-R`, `--recursive`, with or without `-f`), `git reset --hard`, `git clean -f`, force pushes and
+  merges. Exception: a lone `rm -r` whose every target resolves, with no symlink on the way, below
+  `/tmp/claude-<uid>` (not the root itself, and not another session's scratchpad) is routine
+  cleanup.
+- [`hooks/scope-bash.py`](../hooks/scope-bash.py) never auto-allows recursive `rm` outside
+  scratch space, writes to `.git/`, or any path outside the project / scratchpad.
 - DB drops, destructive migrations, and overwrites of pre-existing files are prose-only.
 
 ## Related

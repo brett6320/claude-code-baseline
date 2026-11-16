@@ -2,10 +2,10 @@
   "//": "Reference settings.json — injection & egress hardening (Policy 10/11). Native-first.",
   "//order": "Prefer the OS-sandbox egress allowlist over the Bash denylist: it breaks the trifecta egress leg for ALL commands, not just curl/wget. The hooks cover the two gaps native features leave: pipe-to-shell when the sandbox is off, and invisible-char smuggling in fetched content.",
 
-  "//sandbox": "sandbox.enabled is REQUIRED — the sandbox is off by default and allowedDomains alone does nothing. strictAllowlist denies any unlisted domain instead of prompting; honored from user, managed, or --settings scope, ignored in project .claude/settings*.json. This is the deterministic egress leg-break — the single strongest control here. credentials.files mode deny hides those paths from sandboxed commands; mode mask needs experimental network.tlsTerminate and degrades to deny on macOS/Windows.",
+  "//sandbox": "sandbox.enabled is REQUIRED — the sandbox is off by default and allowedDomains alone does nothing. strictAllowlist denies any unlisted domain instead of prompting; honored from user, managed, or --settings scope, ignored in project .claude/settings*.json. This is the deterministic egress leg-break — the single strongest control here. credentials.files mode deny hides those paths from sandboxed commands; mode mask needs experimental network.tlsTerminate and degrades to deny on macOS/Windows. autoAllowBashIfSandboxed true: the sandbox (not a prompt) is the boundary for sandboxed commands; hook deny/ask, content-scoped ask/deny rules (Bash(npm install *), Bash(ssh:*)), excludedCommands and unsandboxed retries still prompt or block.",
   "sandbox": {
     "enabled": true,
-    "autoAllowBashIfSandboxed": false,
+    "autoAllowBashIfSandboxed": true,
     "excludedCommands": ["git commit *", "git push *"],
     "network": {
       "allowedDomains": ["github.com", "api.github.com", "registry.npmjs.org"],

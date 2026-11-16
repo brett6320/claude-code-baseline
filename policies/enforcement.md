@@ -75,8 +75,18 @@ the built-ins leave. Drop-in config for everything below:
   listed sub-paths, so a git signing/push key stored outside the project needs
   `sandbox.excludedCommands: ["git commit *", "git push *"]` (they still go through the
   permission gate; the pattern matches the *whole* command, so issue `git commit` as a standalone
-  command, not inside a `cd … && …` chain); (2) leave `autoAllowBashIfSandboxed: false` or every
-  sandboxed command is auto-approved and the scope hook's prompts disappear; (3) prefer
+  command, not inside a `cd … && …` chain); (2) set `autoAllowBashIfSandboxed: true` — the
+  sandbox already confines filesystem and network, so a second prompt on top of it is mostly
+  approval fatigue. Hook `deny`/`ask` decisions, content-scoped `ask`/`deny` rules
+  (`Bash(npm install *)`, `Bash(ssh:*)`), `excludedCommands` and unsandboxed retries still
+  prompt or block; only a bare `Bash` ask rule is skipped for sandboxed commands. The trade-off:
+  a command every hook stays silent on now runs unprompted, and the sandbox still lets it write
+  to the project — so in-project deletes not caught by `guardrails.sh` (`find . -delete`, a
+  script) rely on git for recovery, and the hooks' `ask` gates are the real confirmation layer.
+  Those gates are pattern checks: indirection (`R=rm; $R -r dir`, `rm -${x}f dir`,
+  `python3 -c 'shutil.rmtree(…)'`) gets past them by construction. They stop accidents, not a
+  determined injected command — that is what the sandbox boundary is for;
+  (3) prefer
   `credentials.files` `deny` entries for key files by name rather than all of `~/.ssh`, so
   `known_hosts` stays readable.
 - **WebFetch isolation** — fetched pages already run in a **separate context window** and are
@@ -131,13 +141,25 @@ not just on command name — something permission globs (`Bash(ls *)`) cannot ex
 [`hooks/settings.scope-bash.json`](../hooks/settings.scope-bash.json)):
 
 - **allow** — allowlisted read-only / light file-op tools (`ls cat grep find mv cp mkdir rm`
-  (non-recursive) `sed awk jq`, read-only `git`/`gh` subcommands, …) when *every* path argument,
+  `sed awk jq`, read-only `git`/`gh` subcommands, …) when *every* path argument,
   redirect target and `cd` resolves (symlinks followed) inside an in-scope root: the project
   dir, the session scratchpad, or `~/.claude`. Script execution is allowed only when the script
-  itself lives in scratch space; code execution inside the project still prompts.
+  itself lives in scratch space; other code execution inside the project still prompts.
+  - Recursive `rm` only as the sole command on the line, when every explicit target is in
+    scratch, at least one level below `/tmp/claude-<uid>` (never the root; inside a per-project
+    `-…` dir only within this session's own subdir), with no globs, `--` or trailing slash;
+    never via `xargs`.
+  - Build/test tools for listed subcommands only, and only when the command runs sandboxed:
+    `make`, `pytest`, `npm|pnpm|yarn test/run/ls`, `cargo build/check/test/clippy/fmt`,
+    `go build/test/vet/fmt/list`. Installs stay behind the `permissions.ask` rules (policy 7).
+    `CLAUDE_SCOPE_NO_BUILD=1` drops this set.
+  - `$TMPDIR`, `$HOME` and `$CLAUDE_PROJECT_DIR` are expanded before checking (`$TMPDIR` as
+    `/tmp/claude-<uid>` when the sandbox is on and the command is not an unsandboxed retry) —
+    unless the command reassigns or names the variable elsewhere, or escapes / single-quotes a
+    `$`; then nothing is expanded and the command falls through.
 - **ask** — any path outside those roots. Forces a prompt even where a settings allow rule
   (e.g. `Bash(git pull *)`) would otherwise auto-approve.
-- **no decision** (normal flow) — anything it cannot reason about: `$` expansion, backticks,
+- **no decision** (normal flow) — anything it cannot reason about: any other `$` expansion, backticks,
   `$(…)`, `<(…)`, unterminated heredocs, `sudo`, interpreters with inline code, unknown tools,
   sensitive paths (`.env*`, keys, `~/.claude/.local`, `.claude/wrappers`), and any **write**
   (redirect, `sed -i`, `tee`, `mv/cp/rm/touch/chmod`) to protected config: `.claude/`, `.git/`,
@@ -145,7 +167,8 @@ not just on command name — something permission globs (`Bash(ls *)`) cannot ex
   rewrite its own settings is no guardrail.
 
 Fail-closed: an unparseable command never yields *allow*. Other hooks' deny/ask outrank its
-allow. Test matrix: [`hooks/tests/scope-bash.test.sh`](../hooks/tests/scope-bash.test.sh).
+allow. Test matrices: [`hooks/tests/scope-bash.test.sh`](../hooks/tests/scope-bash.test.sh),
+[`hooks/tests/guardrails.test.sh`](../hooks/tests/guardrails.test.sh).
 
 ## Sandboxing
 
