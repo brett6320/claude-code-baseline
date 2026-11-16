@@ -12,7 +12,9 @@ t() { # expected(allow|ask|silent) command
   local exp="$1" cmd="$2" res m
   res=$(printf '%s' "$cmd" | python3 -c '
 import json,sys,os
-print(json.dumps({"tool_name":"Bash","cwd":os.getcwd(),"tool_input":{"command":sys.stdin.read()}}))' \
+ti={"command":sys.stdin.read()}
+if os.environ.get("UNSBX"): ti["dangerouslyDisableSandbox"]=True
+print(json.dumps({"tool_name":"Bash","cwd":os.getcwd(),"session_id":"test-session-id","tool_input":ti}))' \
     | CLAUDE_PROJECT_DIR="$PWD" python3 "$HOOK" \
     | python3 -c '
 import json,sys
@@ -71,9 +73,6 @@ t silent 'rm -r build'
 t silent './run.sh'
 t silent 'python3 scripts/build.py'
 t silent 'python3 -c "print(1)"'
-t silent 'npm test'
-t silent 'make'
-t silent 'echo $HOME'
 t silent 'cat `which ls`'
 t silent 'cat $(ls)'
 t silent 'sudo ls'
@@ -120,5 +119,64 @@ t allow 'cat ~/.claude/hooks/guardrails.sh | head'
 t allow 'ls -la .claude .git'
 t allow 'cat CLAUDE.md .mcp.json'
 t allow 'git diff .claude/settings.local.json'
+
+# ---- known variables: $TMPDIR / $HOME / $CLAUDE_PROJECT_DIR are expanded, others are not
+# (sandbox on -> hook uses /tmp/claude-<uid>; off -> its own $TMPDIR, pinned to scratch here)
+export TMPDIR="$SCR"
+t allow 'ls $TMPDIR && cat "${TMPDIR}/x.txt" > $TMPDIR/y.txt'
+t allow 'rm -rf $TMPDIR/build'
+t allow 'ls $CLAUDE_PROJECT_DIR/hooks'
+t allow 'cat ${HOME}/.claude/settings.json'
+t ask 'echo $HOME'
+t ask 'ls $HOME/Documents'
+t silent 'cat $HOME/.claude/.local/x'
+t silent 'echo $PATH'
+t silent 'ls $TMPDIRX'
+t silent 'TMPDIR=..; rm -r -f $TMPDIR/claude-code-baseline'
+t silent 'export TMPDIR=..; ls $TMPDIR'
+t silent 'HOME=/etc cat $HOME/passwd'
+t silent "ls '\$TMPDIR/x'"
+t silent 'rm -rf \$TMPDIR/x'
+
+# ---- recursive rm: only inside scratch, below a scratch root
+t allow "rm -rf $SCR/build $SCR/out"
+t allow "rm -r $SCR/build"
+t silent "rm -rf /private/tmp/claude-$(id -u)/"
+t silent "rm -rf /tmp/claude-$(id -u)"
+t silent "rm -rf $SCR/*"
+t silent "rm -rf $SCR/../.."
+t silent 'rm -rf'
+t silent 'rm --recur hooks'
+t silent 'rm "-rf" hooks'
+t silent "xargs rm -rf $SCR/a"
+t silent "find $SCR -exec rm -rf {} +"
+t silent "rm -rf $SCR/build/"
+t silent "rm -rf -- $SCR/a -dir"
+t silent "ln -s $PWD $SCR/p; rm -r -f $SCR/p"
+t silent "mkdir -p $SCR/x && rm -rf $SCR/x"
+t silent "rm -rf /tmp/claude-$(id -u)/-Users-x-other/other-session/scratchpad"
+t allow "rm -rf /tmp/claude-$(id -u)/-Users-x-proj/test-session-id/scratchpad/b"
+t ask "rm -rf $SCR/a /etc"
+LNK="$SCR/link-to-project"; rm -f "$LNK"; ln -s "$PWD" "$LNK"
+t silent "rm -rf $LNK/hooks"
+rm -f "$LNK"
+
+# ---- build/test tools: listed subcommands only, still path-scoped
+# (sandbox-on settings via a throwaway HOME; build tools are never allowed unsandboxed)
+SBXHOME="$SCR/fakehome"; mkdir -p "$SBXHOME/.claude"
+printf '{"sandbox":{"enabled":true}}' > "$SBXHOME/.claude/settings.json"
+HOME=$SBXHOME t allow 'npm test'
+HOME=$SBXHOME t allow 'npm run build && make'
+HOME=$SBXHOME t allow 'cargo test --release; go vet ./...'
+HOME=$SBXHOME t allow 'pytest hooks/tests'
+HOME=$SBXHOME t ask 'make -C /opt'
+t silent 'npm install left-pad'
+HOME=$SBXHOME t silent 'npm ci'
+HOME=$SBXHOME t silent 'cargo install ripgrep'
+HOME=$SBXHOME t silent 'go run main.go'
+HOME=$SBXHOME t silent 'npx something'
+HOME=$SBXHOME t silent 'go env -w GOFLAGS=-x'
+HOME=$SBXHOME UNSBX=1 t silent 'npm test'
+HOME=$SBXHOME UNSBX=1 t silent 'make'
 
 exit $fail

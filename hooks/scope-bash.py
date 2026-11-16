@@ -10,7 +10,7 @@ Goal: cut approval fatigue without widening the blast radius.
   ask    : any path that resolves OUTSIDE the in-scope roots — forces a prompt even
            if a settings.json allow rule would otherwise auto-approve it.
   silent : (no decision -> normal permission flow) anything we cannot reason about:
-           $ expansions, backticks, $(...), process substitution, sudo, interpreters
+           $ expansions other than $TMPDIR/$HOME/$CLAUDE_PROJECT_DIR, backticks, $(...), process substitution, sudo, interpreters
            with inline code, unknown tools, code execution inside the project,
            sensitive paths (.env, keys, ~/.claude/.local, .claude/wrappers), and any
            WRITE to protected config (.claude/, .git/, CLAUDE.md, .mcp.json, shell rc).
@@ -22,6 +22,7 @@ Env overrides:
   CLAUDE_PROJECT_DIR        project root (set by Claude Code for hooks)
   CLAUDE_SCOPE_EXTRA_ROOTS  colon-separated extra in-scope roots
   CLAUDE_SCOPE_EXTRA_CMDS   comma-separated extra allowlisted executables
+  CLAUDE_SCOPE_NO_BUILD     set to 1 to drop the default build/test-tool allowlist
 """
 import json
 import os
@@ -36,19 +37,25 @@ UID = os.getuid()
 def _real(p):
     return os.path.realpath(os.path.expanduser(p))
 
+SANDBOX_TMPDIR = f"/tmp/claude-{UID}"
+
 def load_roots(project):
-    scratch = [f"/private/tmp/claude-{UID}", f"/tmp/claude-{UID}"]
+    """-> (roots, scratch_roots, sandbox_enabled)"""
+    scratch = [f"/private/tmp/claude-{UID}", SANDBOX_TMPDIR]
     roots = [_real(project), _real(os.path.join(HOME, ".claude"))]
     roots += [_real(s) for s in scratch]
     extra = os.environ.get("CLAUDE_SCOPE_EXTRA_ROOTS", "")
     roots += [_real(r) for r in extra.split(":") if r]
+    sandbox = False
     try:
         with open(os.path.join(HOME, ".claude", "settings.json")) as fh:
-            for d in (json.load(fh).get("permissions") or {}).get("additionalDirectories") or []:
-                roots.append(_real(d))
+            cfg = json.load(fh)
+        for d in (cfg.get("permissions") or {}).get("additionalDirectories") or []:
+            roots.append(_real(d))
+        sandbox = bool((cfg.get("sandbox") or {}).get("enabled"))
     except Exception:
         pass
-    return roots, [_real(s) for s in scratch]
+    return roots, [_real(s) for s in scratch], sandbox
 
 # Sensitive path components / names: never auto-allow (fall through to prompt).
 SENSITIVE_BASENAME = re.compile(
@@ -135,6 +142,33 @@ GH_RO = {
     "auth": {"status"},
     "search": {"issues", "prs", "repos", "code", "commits"},
 }
+
+# Project build/test tools: allowed only for these subcommands, only when the command
+# runs inside the OS sandbox, and still path-scoped.
+# They run project code, so the OS sandbox is the real boundary; installs stay behind
+# the settings permissions.ask rules (which outrank a hook allow).
+BUILD_TOOLS = {
+    "make": None,  # any target
+    "pytest": None,
+    "npm": {"test", "t", "run", "run-script", "ls", "outdated"},
+    "pnpm": {"test", "t", "run", "ls", "outdated"},
+    "yarn": {"test", "run", "list", "outdated"},
+    "cargo": {"build", "b", "check", "c", "test", "t", "clippy", "fmt", "doc", "tree"},
+    "go": {"build", "test", "vet", "fmt", "list"},
+}
+if os.environ.get("CLAUDE_SCOPE_NO_BUILD") == "1":
+    BUILD_TOOLS = {}
+
+def check_build(exe, args, ctx):
+    if not ctx.get("sandboxed"):
+        raise NoDecision  # project code outside the OS sandbox -> normal prompt
+    subs = BUILD_TOOLS[exe]
+    if subs is None:
+        return
+    pos = nondash(args)
+    if pos and pos[0] in subs:
+        return
+    raise NoDecision
 
 EXTRA_CMDS = {c.strip() for c in os.environ.get("CLAUDE_SCOPE_EXTRA_CMDS", "").split(",") if c.strip()}
 
@@ -247,10 +281,17 @@ def check_awk(args):
     if prog is None or re.search(r"system|getline|\||print\s*>|printf\s*>", prog):
         raise NoDecision
 
-def check_rm(args):
+def check_rm(args, ctx):
     for o in args:
-        if o == "--recursive" or (o.startswith("-") and not o.startswith("--") and ("r" in o or "R" in o)):
-            raise NoDecision
+        if (len(o) > 2 and o.startswith("--") and "--recursive".startswith(o)) or \
+           (o.startswith("-") and not o.startswith("--") and ("r" in o or "R" in o)):
+            targets = nondash(args)
+            if not targets or ctx.get("xargs") or "--" in args:
+                raise NoDecision  # targets we cannot see (stdin / xargs / after --)
+            if any(t.endswith("/") for t in targets):
+                raise NoDecision  # `rm -r link/` follows a symlink on macOS
+            ctx["rm_r"].extend(targets)  # verdict in main: scratch-only, below root
+            return
 
 XARGS_VALOPTS = {"-n", "-I", "-P", "-L", "-s", "-d", "-E", "-a", "-R", "-S", "-J"}
 
@@ -295,7 +336,25 @@ def strip_heredocs(cmd):
         i = j + 1
     return "\n".join(out_lines)
 
-def normalize(cmd):
+KNOWN_VARS = re.compile(r"\$(?:\{(TMPDIR|HOME|CLAUDE_PROJECT_DIR)\}|(TMPDIR|HOME|CLAUDE_PROJECT_DIR)(?![A-Za-z0-9_]))")
+
+KNOWN_NAMES = re.compile(r"(?<![A-Za-z0-9_])(TMPDIR|HOME|CLAUDE_PROJECT_DIR)(?![A-Za-z0-9_])")
+
+def expand_known(cmd, values):
+    """Substitute the few variables whose value we know; any other $ stays and
+    makes normalize() give up. Skip substitution entirely (leaving the $ to fail
+    closed) when the command could change or not expand the value: the name
+    appears outside a plain $VAR / ${VAR} reference (TMPDIR=.., export, read,
+    unset), or a $ is escaped or sits in single quotes."""
+    if KNOWN_NAMES.search(KNOWN_VARS.sub("", cmd)):
+        return cmd
+    if re.search(r"\\\$", cmd) or re.search(r"'[^']*\$[^']*'", cmd):
+        return cmd
+    return KNOWN_VARS.sub(lambda m: values[m.group(1) or m.group(2)], cmd)
+
+def normalize(cmd, values=None):
+    if values:
+        cmd = expand_known(cmd, values)
     if re.search(r"[`]|\$\(|\$\{|<\(|>\(|\$", cmd):
         raise NoDecision
     cmd = strip_heredocs(cmd)
@@ -407,6 +466,8 @@ def eval_argv(argv, ctx):
 
     if exe in EXTRA_CMDS:
         return
+    if exe in BUILD_TOOLS:
+        return check_build(exe, args, ctx)
     if exe == "git":
         return check_git(args)
     if exe == "gh":
@@ -416,11 +477,12 @@ def eval_argv(argv, ctx):
     if exe == "awk" or exe == "gawk":
         return check_awk(args)
     if exe == "rm":
-        return check_rm(args)
+        return check_rm(args, ctx)
     if exe == "xargs":
         inner = split_xargs(args)
         if not inner:
             raise NoDecision
+        ctx["xargs"] = True
         return eval_argv(inner, ctx)
     if exe == "find":
         # inner -exec commands
@@ -445,6 +507,20 @@ def eval_argv(argv, ctx):
         return
     raise NoDecision
 
+def scratch_rm_ok(word, kind, rp, scratch, session):
+    """Recursive delete only inside scratch and never across sessions: below
+    /tmp/claude-<uid>, a first component starting with '-' is a per-project dir
+    holding other sessions' scratchpads, so it must continue into this session."""
+    if kind != "scratch" or rp in scratch or re.search(r"[*?\[]", word):
+        return False
+    for s in scratch:
+        if rp.startswith(s + os.sep):
+            rel = rp[len(s) + 1:].split(os.sep)
+            if rel[0].startswith("-"):
+                return bool(session) and len(rel) >= 3 and rel[1] == session
+            return True
+    return False
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -457,15 +533,34 @@ def main():
         return
     cwd = data.get("cwd") or os.getcwd()
     project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
-    roots, scratch = load_roots(project)
+    roots, scratch, sandbox = load_roots(project)
+    unsandboxed = bool((data.get("tool_input") or {}).get("dangerouslyDisableSandbox"))
+    values = {"HOME": HOME, "CLAUDE_PROJECT_DIR": project}
+    # Sandboxed commands see TMPDIR=/tmp/claude-<uid>; otherwise trust only our own env.
+    tmp = SANDBOX_TMPDIR if sandbox and not unsandboxed else os.environ.get("TMPDIR")
+    if tmp:
+        values["TMPDIR"] = tmp.rstrip("/") or "/"
+
+    sandboxed = sandbox and not unsandboxed
+    session = data.get("session_id") or ""
 
     out, sensitive = [], []
     try:
-        tokens = tokenize(normalize(cmd))
+        tokens = tokenize(normalize(cmd, values))
+        segs = list(segments(tokens))
         curdir = cwd
-        for argv, redirs in segments(tokens):
-            ctx = {"paths": list(redirs), "scripts": [], "cd": None, "writes": list(redirs)}
+        for argv, redirs in segs:
+            ctx = {"paths": list(redirs), "scripts": [], "cd": None, "writes": list(redirs),
+                   "rm_r": [], "sandboxed": sandboxed}
             eval_argv(argv, ctx)
+            for t in ctx["rm_r"]:
+                kind, rp = classify_path(t, curdir, roots, scratch)
+                if kind == "out":
+                    out.append(rp)
+                if not scratch_rm_ok(t, kind, rp, scratch, session) or len(segs) != 1:
+                    # alone on the line: an earlier `ln -s` in the same command would
+                    # turn a scratch path into a link to the project before rm runs
+                    raise NoDecision
             for w in ctx["writes"]:
                 _, rp = classify_path(w, curdir, roots, scratch)
                 if is_protected(rp):

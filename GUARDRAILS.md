@@ -54,8 +54,9 @@ fragments. Tests in [hooks/tests/](hooks/tests/). Full inventory and precedence 
   and merge prompts). Superset of `block-pipe-to-shell.sh`.
 - **[hooks/scope-bash.py](hooks/scope-bash.py)** + [hooks/settings.scope-bash.json](hooks/settings.scope-bash.json)
   — PreToolUse `Bash`: path-scoped approvals. Auto-allows innocuous commands only inside the
-  project / scratchpad / `~/.claude`; forces a prompt outside; never auto-allows code execution
-  in the project or writes to Claude config.
+  project / scratchpad / `~/.claude`; forces a prompt outside; auto-allows project code
+  execution only for listed build/test subcommands (`make`, `npm test`, `cargo test`, …) and
+  never auto-allows writes to Claude config.
 - **Injection & egress hardening** — [hooks/settings.injection-hardening.json](hooks/settings.injection-hardening.json):
   sandbox egress allowlist + credential denies, plus
   - [hooks/block-pipe-to-shell.sh](hooks/block-pipe-to-shell.sh) — PreToolUse deny, POSIX-sh
