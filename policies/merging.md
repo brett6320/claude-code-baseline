@@ -20,9 +20,10 @@ Merging is hard to reverse and outward-facing. It is the user's call, every time
 
 ## Enforcement
 
-[`hooks/guardrails.sh`](../hooks/guardrails.sh) forces a prompt on `git merge` and
-`gh pr merge`. With the sandbox on, `gh` runs via `sandbox.excludedCommands` but still passes
-through the permission gate ([enforcement.md](enforcement.md#permission-rules-settingsjson)).
+[`hooks/guardrails.sh`](../hooks/guardrails.sh) forces a prompt on `git merge` (including
+`git -C <dir> merge` and quoted forms) and `gh pr merge`. The prompt comes from a hook `ask`, so
+it fires whether or not the command runs sandboxed — `autoAllowBashIfSandboxed` does not skip it
+([enforcement.md](enforcement.md#permission-rules-settingsjson)).
 
 ## Related
 
